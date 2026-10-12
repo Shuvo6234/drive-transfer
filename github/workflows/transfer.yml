@@ -1,1 +1,57 @@
 
+name: transfer
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Direct .mp4/.mkv link"
+        required: true
+      filename:
+        description: "Optional file name"
+        default: ""
+      folder_id:
+        description: "Optional Drive folder ID"
+        default: ""
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: Transfer
+        id: transfer
+        env:
+          SRC_URL: ${{ inputs.url }}
+          FILE_NAME: ${{ inputs.filename }}
+          FOLDER_ID: ${{ inputs.folder_id }}
+          GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+        run: |
+          echo "::add-mask::$SRC_URL"
+          python transfer.py
+
+      - name: Restart for the next part
+        if: steps.transfer.outputs.again == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SRC_URL: ${{ inputs.url }}
+        run: |
+          echo "::add-mask::$SRC_URL"
+          gh workflow run transfer.yml \
+            -f url="$SRC_URL" \
+            -f filename="${{ inputs.filename }}" \
+            -f folder_id="${{ inputs.folder_id }}"
