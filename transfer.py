@@ -41,12 +41,17 @@ def file_name():
     return re.sub(r'[\\/:*?"<>|]', "_", n)
 
 
+UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
+
+
 def probe():
-    r = requests.get(URL, headers={"Range": "bytes=0-0"}, stream=True, timeout=60)
+    r = requests.get(URL, headers={**UA, "Range": "bytes=0-0"}, stream=True, timeout=60)
     code, cr = r.status_code, r.headers.get("Content-Range", "")
+    log(f"Source check: HTTP {code} | Accept-Ranges={r.headers.get('Accept-Ranges')} "
+        f"| Content-Range={cr or '-'} | Content-Length={r.headers.get('Content-Length')}")
     r.close()
     if code != 206 or "/" not in cr:
-        sys.exit("Source server does not support Range (resume). Cannot continue.")
+        sys.exit(f"Source did not give a partial response (HTTP {code}). Cannot continue.")
     return int(cr.split("/")[1])
 
 
@@ -115,7 +120,7 @@ def query_offset(session, total):
 def fetch(a, b):
     for i in range(6):
         try:
-            r = requests.get(URL, headers={"Range": f"bytes={a}-{b}"}, timeout=(30, 120))
+            r = requests.get(URL, headers={**UA, "Range": f"bytes={a}-{b}"}, timeout=(30, 120))
             if r.status_code == 206 and len(r.content) == b - a + 1:
                 return r.content
             log(f"source returned status {r.status_code}, retrying")
